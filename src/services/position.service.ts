@@ -25,15 +25,24 @@ export class PositionService {
 
   async getCurrentPosition(): Promise<Position | null> {
     try {
-      const response = await axios.get(
-        `${CONFIG.SIGNALS_API_URL}/api/users/${this.blockchain.account.address}/positions`
-      );
+      // Fix URL construction for your API structure
+      const baseUrl = CONFIG.SIGNALS_API_URL.replace('/.netlify/functions/signals', '');
+      const positionsUrl = `${baseUrl}/api/users/${this.blockchain.account.address}/positions`;
+      
+      console.log('Fetching position from:', positionsUrl);
+      
+      const response = await axios.get(positionsUrl);
 
-      const positions = response.data.positions;
+      // Based on your UserInsightsService, the response structure
+      const globalPosition = response.data;
+      
+      if (!globalPosition.positions || globalPosition.positions.length === 0) {
+        return null;
+      }
       
       // Find position for our index
-      const position = positions.find(
-        (p: Position) => p.indexAddress.toLowerCase() === CONFIG.INDEX_ADDRESS.toLowerCase()
+      const position = globalPosition.positions.find(
+        (p: any) => p.indexAddress.toLowerCase() === CONFIG.INDEX_ADDRESS.toLowerCase()
       );
 
       return position || null;
