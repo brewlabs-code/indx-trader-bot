@@ -1,0 +1,24 @@
+[build]
+  command = "npm run build"
+  functions = "netlify/functions"
+  publish = "."
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["viem"]
+
+# Check for buy signals every 5 minutes
+[functions.check-signals]
+  schedule = "*/5 * * * *"
+  timeout = 30
+
+# Check positions for profit targets every 15 minutes
+[functions.check-positions]
+  schedule = "*/15 * * * *"
+  timeout = 30
+
+# API endpoint to check bot status
+[[redirects]]
+  from = "/api/bot-status"
+  to = "/.netlify/functions/bot-status"
+  status = 200
