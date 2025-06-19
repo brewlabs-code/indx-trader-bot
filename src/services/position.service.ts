@@ -24,8 +24,11 @@ export class PositionService {
   }
 
   async getCurrentPosition(): Promise<Position | null> {
+    console.log('PositionService.getCurrentPosition() called');
+    
     try {
       const walletAddress = this.blockchain.account.address;
+      console.log('Wallet address:', walletAddress);
       
       // Use the v2 positions endpoint
       const positionsUrl = `https://index-performance.netlify.app/v2/users/${walletAddress}/positions`;
@@ -33,14 +36,17 @@ export class PositionService {
       console.log('Fetching position from:', positionsUrl);
       
       const response = await axios.get(positionsUrl);
+      console.log('Position API response status:', response.status);
 
       // Based on your UserInsightsService, the response structure
       const globalPosition = response.data;
       
       if (!globalPosition || !globalPosition.positions || globalPosition.positions.length === 0) {
-        console.log('No positions found');
+        console.log('No positions found in response data');
         return null;
       }
+      
+      console.log(`Found ${globalPosition.positions.length} positions`);
       
       // Find position for our index
       const position = globalPosition.positions.find(
@@ -48,25 +54,41 @@ export class PositionService {
       );
 
       if (position) {
-        console.log('Found position:', position);
+        console.log('Found position for our index:', {
+          indexAddress: position.indexAddress,
+          indexName: position.indexName,
+          profitLoss: position.profitLoss,
+        });
+      } else {
+        console.log('No position found for index:', CONFIG.INDEX_ADDRESS);
       }
 
       return position || null;
     } catch (error: any) {
       if (error.response?.status === 404) {
-        console.log('No positions found (404)');
+        console.log('No positions found (404) - this is normal for new wallets');
         return null;
       }
+      
       console.error('Error fetching position:', error.message);
+      if (error.response) {
+        console.error('Error response status:', error.response.status);
+        console.error('Error response data:', error.response.data);
+      }
+      
       return null;
     }
   }
 
   shouldTakeProfit(position: Position): boolean {
-    return position.profitLoss.percentage >= CONFIG.PROFIT_TARGET;
+    const shouldTake = position.profitLoss.percentage >= CONFIG.PROFIT_TARGET;
+    console.log(`Should take profit? ${shouldTake} (Current: ${position.profitLoss.percentage}%, Target: ${CONFIG.PROFIT_TARGET}%)`);
+    return shouldTake;
   }
 
   isInLoss(position: Position): boolean {
-    return position.profitLoss.percentage < 0;
+    const inLoss = position.profitLoss.percentage < 0;
+    console.log(`Position in loss? ${inLoss} (Current P&L: ${position.profitLoss.percentage}%)`);
+    return inLoss;
   }
 }
