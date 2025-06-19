@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions';
 import { PositionService } from '../../src/services/position.service';
 import { TradeService } from '../../src/services/trade.service';
+import { CONFIG } from '../../src/config/constants'; // <-- ADDED THIS IMPORT
 
 export const handler: Handler = async (event, context) => {
   console.log('Checking positions...');
