@@ -25,9 +25,10 @@ export class PositionService {
 
   async getCurrentPosition(): Promise<Position | null> {
     try {
-      // Fix URL construction for your API structure
-      const baseUrl = CONFIG.SIGNALS_API_URL.replace('/.netlify/functions/signals', '');
-      const positionsUrl = `${baseUrl}/api/users/${this.blockchain.account.address}/positions`;
+      const walletAddress = this.blockchain.account.address;
+      
+      // Use the v2 positions endpoint
+      const positionsUrl = `https://index-performance.netlify.app/v2/users/${walletAddress}/positions`;
       
       console.log('Fetching position from:', positionsUrl);
       
@@ -36,7 +37,8 @@ export class PositionService {
       // Based on your UserInsightsService, the response structure
       const globalPosition = response.data;
       
-      if (!globalPosition.positions || globalPosition.positions.length === 0) {
+      if (!globalPosition || !globalPosition.positions || globalPosition.positions.length === 0) {
+        console.log('No positions found');
         return null;
       }
       
@@ -45,9 +47,17 @@ export class PositionService {
         (p: any) => p.indexAddress.toLowerCase() === CONFIG.INDEX_ADDRESS.toLowerCase()
       );
 
+      if (position) {
+        console.log('Found position:', position);
+      }
+
       return position || null;
-    } catch (error) {
-      console.error('Error fetching position:', error);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        console.log('No positions found (404)');
+        return null;
+      }
+      console.error('Error fetching position:', error.message);
       return null;
     }
   }
