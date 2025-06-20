@@ -210,20 +210,23 @@ export class TradeService {
         return null;
       }
 
-      // Get user's balance in the index
-      const userBalance = await publicClient.readContract({
+      // Get user's info from the index
+      const userInfoResult = await publicClient.readContract({
         address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
-        functionName: 'balanceOf',
+        functionName: 'userInfo',
         args: [userAddress],
-      });
+      }) as [bigint[], bigint];
 
-      if (userBalance === 0n) {
+      const [tokenBalances, usdAmount] = userInfoResult;
+
+      if (!tokenBalances || tokenBalances.length === 0 || tokenBalances.every(balance => balance === 0n)) {
         console.log('User has no balance in the index');
         return null;
       }
 
-      console.log('User index balance:', userBalance.toString());
+      console.log('User token balances:', tokenBalances.map(b => b.toString()));
+      console.log('User USD amount:', usdAmount.toString());
 
       // Get number of tokens in index
       const numTokens = await publicClient.readContract({
