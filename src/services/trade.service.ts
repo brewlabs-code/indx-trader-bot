@@ -68,9 +68,9 @@ export class TradeService {
       
       console.log('Percents array:', percents.map(p => p.toString()));
 
-      // Get precomputed trades from data contract with increased gas limit
+      // Get precomputed trades from data contract
       // Use WETH address for data contract calls
-      console.log('Calling precomputeZapIn on data contract with WETH address and 15M gas...');
+      console.log('Calling precomputeZapIn on data contract with WETH address...');
       const formattedOffers = await publicClient.readContract({
         address: CONFIG.DATA_CONTRACT_ADDRESS,
         abi: dataAbi,
@@ -82,7 +82,6 @@ export class TradeService {
           tokenAddresses,
           percents
         ],
-        gas: 15_000_000n, // Set gas limit to 15M
       }) as FormattedOffer[];
 
       console.log('Received formatted offers:', formattedOffers.length);
@@ -223,9 +222,9 @@ export class TradeService {
       console.log('Exit - Token addresses:', tokenAddresses);
       console.log('Exit - Token balances:', tokenBalances.map(b => b.toString()));
 
-      // Get precomputed trades for exit from data contract with increased gas limit
+      // Get precomputed trades for exit from data contract
       // Use WETH address for data contract calls
-      console.log('Calling precomputeZapOut on data contract with WETH address and 15M gas...');
+      console.log('Calling precomputeZapOut on data contract with WETH address...');
       const formattedOffers = await publicClient.readContract({
         address: CONFIG.DATA_CONTRACT_ADDRESS,
         abi: dataAbi,
@@ -236,7 +235,6 @@ export class TradeService {
           tokenBalances,
           WETH_ADDRESS // Use WETH instead of ETH_ADDRESS
         ],
-        gas: 15_000_000n, // Set gas limit to 15M
       }) as FormattedOffer[];
 
       console.log('Received formatted offers for exit:', formattedOffers.length);
