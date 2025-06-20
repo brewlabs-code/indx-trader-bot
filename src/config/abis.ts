@@ -21,19 +21,12 @@ export const indexAbi = [
     type: "function"
   },
   {
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [
-      { name: "account", type: "address" },
-      { name: "tokenIndex", type: "uint256" }
+    inputs: [{ name: "_user", type: "address" }],
+    name: "userInfo",
+    outputs: [
+      { name: "amounts", type: "uint256[]" },
+      { name: "usdAmount", type: "uint256" }
     ],
-    name: "getTokenBalance",
-    outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function"
   },
