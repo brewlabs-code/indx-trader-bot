@@ -235,9 +235,8 @@ export class TradeService {
         functionName: 'NUM_TOKENS',
       });
 
-      // Get token addresses and user's balance of each token
+      // Get token addresses - we already have balances from userInfo
       const tokenAddresses: `0x${string}`[] = [];
-      const tokenBalances: bigint[] = [];
       
       for (let i = 0; i < Number(numTokens); i++) {
         const tokenAddress = await publicClient.readContract({
@@ -248,22 +247,6 @@ export class TradeService {
         });
         
         tokenAddresses.push(tokenAddress as `0x${string}`);
-        
-        // Get user's balance of this specific token in the index
-        try {
-          const tokenBalance = await publicClient.readContract({
-            address: CONFIG.INDEX_ADDRESS,
-            abi: indexAbi,
-            functionName: 'getTokenBalance',
-            args: [userAddress, BigInt(i)],
-          });
-          tokenBalances.push(tokenBalance);
-        } catch {
-          // If getTokenBalance doesn't exist, calculate proportional share
-          // This is a fallback - you may need to adjust based on your index implementation
-          const proportionalBalance = userBalance / numTokens;
-          tokenBalances.push(proportionalBalance);
-        }
       }
 
       console.log('Exit - Token addresses:', tokenAddresses);
