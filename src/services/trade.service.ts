@@ -7,6 +7,9 @@ import { BlockchainService } from './blockchain.service';
 // WETH address on Base
 const WETH_ADDRESS = '0x4200000000000000000000000000000000000006' as const;
 
+// Gas limit for zapIn and zapOut transactions
+const ZAP_GAS_LIMIT = 12_000_000n;
+
 interface FormattedOffer {
   amounts: bigint[];
   adapters: `0x${string}`[];
@@ -158,6 +161,7 @@ export class TradeService {
 
       // Execute zapIn on the INDEX_ADDRESS with ETH
       console.log('Executing zapIn with ETH...');
+      console.log('Gas limit:', ZAP_GAS_LIMIT.toString());
       const hash = await walletClient.writeContract({
         address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
@@ -171,6 +175,7 @@ export class TradeService {
           CONFIG.MAX_SLIPPAGE,
         ],
         value: ethAmount, // Send ETH with the transaction
+        gas: ZAP_GAS_LIMIT, // Set gas limit to 12M
       });
 
       console.log('Enter position tx:', hash);
@@ -335,6 +340,7 @@ export class TradeService {
 
       // Execute zapOut on the INDEX_ADDRESS to ETH
       console.log('Executing zapOut to ETH...');
+      console.log('Gas limit:', ZAP_GAS_LIMIT.toString());
       const hash = await walletClient.writeContract({
         address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
@@ -345,6 +351,7 @@ export class TradeService {
           0n, // minTotalOut
           CONFIG.MAX_SLIPPAGE,
         ],
+        gas: ZAP_GAS_LIMIT, // Set gas limit to 12M
       });
 
       console.log('Exit position tx:', hash);
