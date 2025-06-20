@@ -22,3 +22,15 @@
   from = "/api/bot-status"
   to = "/.netlify/functions/bot-status"
   status = 200
+
+# API endpoint to manually take a position
+[[redirects]]
+  from = "/api/take-position"
+  to = "/.netlify/functions/take-position"
+  status = 200
+
+# API endpoint to manually sell position
+[[redirects]]
+  from = "/api/sell-position"
+  to = "/.netlify/functions/sell-position"
+  status = 200
