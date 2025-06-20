@@ -1,4 +1,4 @@
-import { parseEther } from 'viem';
+import { parseEther, encodeFunctionData } from 'viem';
 import { CONFIG, ETH_ADDRESS } from '../config/constants';
 import { indexAbi } from '../config/abis';
 import { dataAbi } from '../config/dataAbi';
@@ -11,12 +11,13 @@ interface FormattedOffer {
   gasEstimate: bigint;
 }
 
-interface Trade {
+// Define the Trade type to match the ABI exactly
+type TradeStruct = {
   amountIn: bigint;
   amountOut: bigint;
-  path: readonly `0x${string}`[];
-  adapters: readonly `0x${string}`[];
-}
+  path: `0x${string}`[];
+  adapters: `0x${string}`[];
+};
 
 export class TradeService {
   private blockchain: BlockchainService;
@@ -89,8 +90,8 @@ export class TradeService {
 
       console.log('Received formatted offers:', formattedOffers.length);
 
-      // Transform FormattedOffer array to Trade array
-      const trades: readonly Trade[] = formattedOffers.map((offer, index) => {
+      // Transform FormattedOffer array to TradeStruct array
+      const trades: TradeStruct[] = formattedOffers.map((offer, index) => {
         // Calculate the amount for this token
         const amountForToken = (ethAmount * percents[index]) / 10000n;
         
@@ -100,9 +101,9 @@ export class TradeService {
           return {
             amountIn: amountForToken,
             amountOut: 0n,
-            path: [] as readonly `0x${string}`[],
-            adapters: [] as readonly `0x${string}`[]
-          };
+            path: [],
+            adapters: []
+          } as TradeStruct;
         }
 
         // Get the output amount (last amount in the amounts array)
@@ -113,17 +114,18 @@ export class TradeService {
         return {
           amountIn: amountForToken,
           amountOut: amountOut,
-          path: offer.path as readonly `0x${string}`[],
-          adapters: offer.adapters as readonly `0x${string}`[]
-        };
+          path: offer.path,
+          adapters: offer.adapters
+        } as TradeStruct;
       });
 
       console.log('Transformed trades:', trades.length);
 
-      // Execute zapIn on the INDEX_ADDRESS
+      // Execute zapIn on the INDEX_ADDRESS using raw transaction
       console.log('Executing zapIn...');
-      const hash = await walletClient.writeContract({
-        address: CONFIG.INDEX_ADDRESS,
+      
+      // Encode the function data
+      const data = encodeFunctionData({
         abi: indexAbi,
         functionName: 'zapIn',
         args: [
@@ -131,9 +133,15 @@ export class TradeService {
           ethAmount,
           percents,
           trades,
-          0n, // minTotalValueOut (0 for now, can be calculated from slippage)
+          0n,
           CONFIG.MAX_SLIPPAGE,
         ],
+      });
+
+      // Send the transaction
+      const hash = await walletClient.sendTransaction({
+        to: CONFIG.INDEX_ADDRESS,
+        data,
         value: ethAmount,
       });
 
@@ -241,17 +249,17 @@ export class TradeService {
 
       console.log('Received formatted offers for exit:', formattedOffers.length);
 
-      // Transform FormattedOffer array to Trade array
-      const trades: readonly Trade[] = formattedOffers.map((offer, index) => {
+      // Transform FormattedOffer array to TradeStruct array
+      const trades: TradeStruct[] = formattedOffers.map((offer, index) => {
         // If the offer has no path (empty offer), create a minimal trade
         if (!offer.path || offer.path.length === 0) {
           console.log(`Token ${index}: Empty offer for exit`);
           return {
             amountIn: tokenBalances[index],
             amountOut: 0n,
-            path: [] as readonly `0x${string}`[],
-            adapters: [] as readonly `0x${string}`[]
-          };
+            path: [],
+            adapters: []
+          } as TradeStruct;
         }
 
         // Get the output amount (last amount in the amounts array)
@@ -262,23 +270,30 @@ export class TradeService {
         return {
           amountIn: tokenBalances[index],
           amountOut: amountOut,
-          path: offer.path as readonly `0x${string}`[],
-          adapters: offer.adapters as readonly `0x${string}`[]
-        };
+          path: offer.path,
+          adapters: offer.adapters
+        } as TradeStruct;
       });
 
-      // Execute zapOut on the INDEX_ADDRESS
+      // Execute zapOut on the INDEX_ADDRESS using raw transaction
       console.log('Executing zapOut...');
-      const hash = await walletClient.writeContract({
-        address: CONFIG.INDEX_ADDRESS,
+      
+      // Encode the function data
+      const data = encodeFunctionData({
         abi: indexAbi,
         functionName: 'zapOut',
         args: [
           ETH_ADDRESS as `0x${string}`,
           trades,
-          0n, // minTotalOut (0 for now, can be calculated from slippage)
+          0n,
           CONFIG.MAX_SLIPPAGE,
         ],
+      });
+
+      // Send the transaction
+      const hash = await walletClient.sendTransaction({
+        to: CONFIG.INDEX_ADDRESS,
+        data,
       });
 
       console.log('Exit position tx:', hash);
