@@ -69,7 +69,7 @@ export class TradeService {
       console.log('Percents array:', percents.map(p => p.toString()));
 
       // Get precomputed trades from data contract
-      // Use WETH address for data contract calls
+      // Use WETH address for data contract calls since it computes paths from WETH
       console.log('Calling precomputeZapIn on data contract with WETH address...');
       const formattedOffers = await publicClient.readContract({
         address: CONFIG.DATA_CONTRACT_ADDRESS,
@@ -77,7 +77,7 @@ export class TradeService {
         functionName: 'precomputeZapIn',
         args: [
           CONFIG.AGGREGATOR_ADDRESS,
-          WETH_ADDRESS, // Use WETH instead of ETH_ADDRESS
+          WETH_ADDRESS, // Use WETH for path computation
           ethAmount,
           tokenAddresses,
           percents
@@ -86,52 +86,91 @@ export class TradeService {
 
       console.log('Received formatted offers:', formattedOffers.length);
 
-      // Transform FormattedOffer array to Trade array with explicit typing
-      const trades = formattedOffers.map((offer, index) => {
-        // Calculate the amount for this token
-        const amountForToken = (ethAmount * percents[index]) / 10000n;
+      // Create trades array with NUM_TOKENS + 1 elements
+      const trades = new Array(Number(numTokens) + 1);
+      
+      // First trade (index 0) is for token-to-ETH conversion
+      // Since we're starting with ETH, this is empty
+      trades[0] = {
+        amountIn: 0n,
+        amountOut: 0n,
+        path: [] as `0x${string}`[],
+        adapters: [] as `0x${string}`[]
+      };
+
+      // Transform FormattedOffer array to Trade array (indices 1 to NUM_TOKENS)
+      for (let i = 0; i < formattedOffers.length; i++) {
+        const offer = formattedOffers[i];
+        const targetToken = tokenAddresses[i];
+        const amountForToken = (ethAmount * percents[i]) / 10000n;
         
-        // If the offer has no path (empty offer), create a minimal trade
-        if (!offer.path || offer.path.length === 0) {
-          console.log(`Token ${index}: Empty offer, creating minimal trade`);
-          return {
-            amountIn: amountForToken,
+        // Check if target token is WETH (should be index 0 based on contract)
+        const isTargetWETH = targetToken.toLowerCase() === WETH_ADDRESS.toLowerCase();
+        
+        if (isTargetWETH) {
+          // For WETH, the contract will handle the deposit internally
+          // We provide an empty trade
+          console.log(`Token ${i}: WETH - will be deposited directly`);
+          trades[i + 1] = {
+            amountIn: 0n, // Contract will set this
+            amountOut: 0n, // Contract will set this
+            path: [] as `0x${string}`[], // Empty path
+            adapters: [] as `0x${string}`[]
+          };
+        } else if (!offer.path || offer.path.length === 0) {
+          // Empty offer from data contract
+          console.log(`Token ${i}: Empty offer, creating minimal trade`);
+          trades[i + 1] = {
+            amountIn: 0n,
             amountOut: 0n,
             path: [] as `0x${string}`[],
             adapters: [] as `0x${string}`[]
           };
+        } else {
+          // Regular swap path
+          const amountOut = offer.amounts.length > 1 ? offer.amounts[offer.amounts.length - 1] : offer.amounts[0];
+          
+          console.log(`Token ${i}: ${amountForToken.toString()} wei -> ${amountOut.toString()} tokens`);
+          console.log(`  Path: ${offer.path.join(' -> ')}`);
+          console.log(`  Adapters: ${offer.adapters.length > 0 ? offer.adapters.join(', ') : 'none'}`);
+          
+          trades[i + 1] = {
+            amountIn: 0n, // Contract will set this based on percents
+            amountOut: amountOut,
+            path: offer.path,
+            adapters: offer.adapters
+          };
         }
-
-        // Get the output amount (last amount in the amounts array)
-        const amountOut = offer.amounts.length > 1 ? offer.amounts[offer.amounts.length - 1] : offer.amounts[0];
-        
-        console.log(`Token ${index}: ${amountForToken.toString()} wei -> ${amountOut.toString()} tokens`);
-        
-        return {
-          amountIn: amountForToken,
-          amountOut: amountOut,
-          path: offer.path,
-          adapters: offer.adapters
-        };
-      });
+      }
 
       console.log('Transformed trades:', trades.length);
+      
+      // Log the trades for debugging
+      trades.forEach((trade, index) => {
+        console.log(`Trade ${index}:`, {
+          amountIn: trade.amountIn.toString(),
+          amountOut: trade.amountOut.toString(),
+          pathLength: trade.path.length,
+          path: trade.path.join(' -> ') || 'empty',
+          adapters: trade.adapters.join(', ') || 'none'
+        });
+      });
 
-      // Execute zapIn on the INDEX_ADDRESS - still use ETH_ADDRESS for the actual transaction
-      console.log('Executing zapIn...');
+      // Execute zapIn on the INDEX_ADDRESS with ETH
+      console.log('Executing zapIn with ETH...');
       const hash = await walletClient.writeContract({
         address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
         functionName: 'zapIn',
         args: [
-          ETH_ADDRESS as `0x${string}`, // Keep ETH_ADDRESS for the actual zapIn call
+          ETH_ADDRESS as `0x${string}`, // ETH address since we're sending ETH
           ethAmount,
           percents,
           trades as any, // Type assertion to bypass viem's strict typing
-          0n, // minTotalValueOut (0 for now, can be calculated from slippage)
+          0n, // minTotalValueOut
           CONFIG.MAX_SLIPPAGE,
         ],
-        value: ethAmount,
+        value: ethAmount, // Send ETH with the transaction
       });
 
       console.log('Enter position tx:', hash);
@@ -233,48 +272,77 @@ export class TradeService {
           CONFIG.AGGREGATOR_ADDRESS,
           tokenAddresses,
           tokenBalances,
-          WETH_ADDRESS // Use WETH instead of ETH_ADDRESS
+          WETH_ADDRESS // Use WETH for ETH output
         ],
       }) as FormattedOffer[];
 
       console.log('Received formatted offers for exit:', formattedOffers.length);
 
-      // Transform FormattedOffer array to Trade array with explicit typing
-      const trades = formattedOffers.map((offer, index) => {
-        // If the offer has no path (empty offer), create a minimal trade
-        if (!offer.path || offer.path.length === 0) {
-          console.log(`Token ${index}: Empty offer for exit`);
-          return {
-            amountIn: tokenBalances[index],
+      // Create trades array with NUM_TOKENS + 1 elements
+      const trades = new Array(Number(numTokens) + 1);
+      
+      // Transform FormattedOffer array to Trade array (indices 0 to NUM_TOKENS-1)
+      for (let i = 0; i < formattedOffers.length; i++) {
+        const offer = formattedOffers[i];
+        const sourceToken = tokenAddresses[i];
+        
+        // Check if source token is WETH
+        const isSourceWETH = sourceToken.toLowerCase() === WETH_ADDRESS.toLowerCase();
+        
+        if (isSourceWETH) {
+          // For WETH exit, the contract will handle unwrapping
+          console.log(`Token ${i}: WETH - will be unwrapped directly`);
+          trades[i] = {
+            amountIn: tokenBalances[i],
+            amountOut: tokenBalances[i], // 1:1 for unwrapping
+            path: [] as `0x${string}`[], // Empty path
+            adapters: [] as `0x${string}`[]
+          };
+        } else if (!offer.path || offer.path.length === 0) {
+          // Empty offer
+          console.log(`Token ${i}: Empty offer for exit`);
+          trades[i] = {
+            amountIn: tokenBalances[i],
             amountOut: 0n,
             path: [] as `0x${string}`[],
             adapters: [] as `0x${string}`[]
           };
+        } else {
+          // Regular swap path
+          const amountOut = offer.amounts.length > 1 ? offer.amounts[offer.amounts.length - 1] : offer.amounts[0];
+          
+          console.log(`Token ${i}: ${tokenBalances[i].toString()} tokens -> ${amountOut.toString()} wei`);
+          console.log(`  Path: ${offer.path.join(' -> ')}`);
+          console.log(`  Adapters: ${offer.adapters.length > 0 ? offer.adapters.join(', ') : 'none'}`);
+          
+          trades[i] = {
+            amountIn: tokenBalances[i],
+            amountOut: amountOut,
+            path: offer.path,
+            adapters: offer.adapters
+          };
         }
+      }
+      
+      // Last trade (index NUM_TOKENS) is for ETH-to-token conversion
+      // Since we're outputting ETH, this is empty
+      trades[Number(numTokens)] = {
+        amountIn: 0n,
+        amountOut: 0n,
+        path: [] as `0x${string}`[],
+        adapters: [] as `0x${string}`[]
+      };
 
-        // Get the output amount (last amount in the amounts array)
-        const amountOut = offer.amounts.length > 1 ? offer.amounts[offer.amounts.length - 1] : offer.amounts[0];
-        
-        console.log(`Token ${index}: ${tokenBalances[index].toString()} tokens -> ${amountOut.toString()} wei`);
-        
-        return {
-          amountIn: tokenBalances[index],
-          amountOut: amountOut,
-          path: offer.path,
-          adapters: offer.adapters
-        };
-      });
-
-      // Execute zapOut on the INDEX_ADDRESS - still use ETH_ADDRESS for the actual transaction
-      console.log('Executing zapOut...');
+      // Execute zapOut on the INDEX_ADDRESS to ETH
+      console.log('Executing zapOut to ETH...');
       const hash = await walletClient.writeContract({
         address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
         functionName: 'zapOut',
         args: [
-          ETH_ADDRESS as `0x${string}`, // Keep ETH_ADDRESS for the actual zapOut call
+          ETH_ADDRESS as `0x${string}`, // ETH address since we want ETH back
           trades as any, // Type assertion to bypass viem's strict typing
-          0n, // minTotalOut (0 for now, can be calculated from slippage)
+          0n, // minTotalOut
           CONFIG.MAX_SLIPPAGE,
         ],
       });
