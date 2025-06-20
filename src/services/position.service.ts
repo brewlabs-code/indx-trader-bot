@@ -30,26 +30,26 @@ export class PositionService {
       const walletAddress = this.blockchain.account.address;
       console.log('Wallet address:', walletAddress);
       
-      // Use the v2 positions endpoint
-      const positionsUrl = `https://index-performance.netlify.app/v2/users/${walletAddress}/positions`;
+      // Use the correct v2 positions endpoint
+      const positionsUrl = `https://indexes-api.brewlabs.info/v2/users/${walletAddress}/positions`;
       
       console.log('Fetching position from:', positionsUrl);
       
       const response = await axios.get(positionsUrl);
       console.log('Position API response status:', response.status);
 
-      // Based on your UserInsightsService, the response structure
-      const globalPosition = response.data;
+      // Based on the actual API response structure
+      const responseData = response.data;
       
-      if (!globalPosition || !globalPosition.positions || globalPosition.positions.length === 0) {
+      if (!responseData || !responseData.data || !responseData.data.positions || responseData.data.positions.length === 0) {
         console.log('No positions found in response data');
         return null;
       }
       
-      console.log(`Found ${globalPosition.positions.length} positions`);
+      console.log(`Found ${responseData.data.positions.length} positions`);
       
       // Find position for our index
-      const position = globalPosition.positions.find(
+      const position = responseData.data.positions.find(
         (p: any) => p.indexAddress.toLowerCase() === CONFIG.INDEX_ADDRESS.toLowerCase()
       );
 
