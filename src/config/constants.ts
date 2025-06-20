@@ -6,6 +6,7 @@ export const CONFIG = {
   // Contracts
   INDEX_ADDRESS: process.env.INDEX_ADDRESS! as `0x${string}`,
   DATA_CONTRACT_ADDRESS: process.env.DATA_CONTRACT_ADDRESS! as `0x${string}`,
+  AGGREGATOR_ADDRESS: process.env.AGGREGATOR_ADDRESS! as `0x${string}`,
   
   // Trading
   PROFIT_TARGET: parseFloat(process.env.PROFIT_TARGET || "5.0"),
