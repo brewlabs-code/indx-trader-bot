@@ -14,8 +14,8 @@ interface FormattedOffer {
 interface Trade {
   amountIn: bigint;
   amountOut: bigint;
-  path: `0x${string}`[];
-  adapters: `0x${string}`[];
+  path: readonly `0x${string}`[];
+  adapters: readonly `0x${string}`[];
 }
 
 export class TradeService {
@@ -33,12 +33,12 @@ export class TradeService {
       console.log('TradeService.enterPosition called with amount:', ethAmount.toString());
 
       // Validate we have required addresses
-      if (!CONFIG.DATA_CONTRACT_ADDRESS || CONFIG.DATA_CONTRACT_ADDRESS === 'your_data_contract_address') {
+      if (!CONFIG.DATA_CONTRACT_ADDRESS || CONFIG.DATA_CONTRACT_ADDRESS === ('your_data_contract_address' as `0x${string}`)) {
         console.error('DATA_CONTRACT_ADDRESS not configured');
         return null;
       }
 
-      if (!CONFIG.AGGREGATOR_ADDRESS || CONFIG.AGGREGATOR_ADDRESS === 'your_aggregator_address') {
+      if (!CONFIG.AGGREGATOR_ADDRESS || CONFIG.AGGREGATOR_ADDRESS === ('your_aggregator_address' as `0x${string}`)) {
         console.error('AGGREGATOR_ADDRESS not configured');
         return null;
       }
@@ -60,8 +60,8 @@ export class TradeService {
           abi: indexAbi,
           functionName: 'tokens',
           args: [BigInt(i)],
-        }) as `0x${string}`;
-        tokenAddresses.push(tokenAddress);
+        });
+        tokenAddresses.push(tokenAddress as `0x${string}`);
       }
 
       console.log('Index token addresses:', tokenAddresses);
@@ -90,7 +90,7 @@ export class TradeService {
       console.log('Received formatted offers:', formattedOffers.length);
 
       // Transform FormattedOffer array to Trade array
-      const trades: Trade[] = formattedOffers.map((offer, index) => {
+      const trades: readonly Trade[] = formattedOffers.map((offer, index) => {
         // Calculate the amount for this token
         const amountForToken = (ethAmount * percents[index]) / 10000n;
         
@@ -100,8 +100,8 @@ export class TradeService {
           return {
             amountIn: amountForToken,
             amountOut: 0n,
-            path: [],
-            adapters: []
+            path: [] as readonly `0x${string}`[],
+            adapters: [] as readonly `0x${string}`[]
           };
         }
 
@@ -113,8 +113,8 @@ export class TradeService {
         return {
           amountIn: amountForToken,
           amountOut: amountOut,
-          path: offer.path,
-          adapters: offer.adapters
+          path: offer.path as readonly `0x${string}`[],
+          adapters: offer.adapters as readonly `0x${string}`[]
         };
       });
 
@@ -127,7 +127,7 @@ export class TradeService {
         abi: indexAbi,
         functionName: 'zapIn',
         args: [
-          ETH_ADDRESS,
+          ETH_ADDRESS as `0x${string}`,
           ethAmount,
           percents,
           trades,
@@ -159,12 +159,12 @@ export class TradeService {
       console.log('TradeService.exitPosition called');
 
       // Validate we have required addresses
-      if (!CONFIG.DATA_CONTRACT_ADDRESS || CONFIG.DATA_CONTRACT_ADDRESS === 'your_data_contract_address') {
+      if (!CONFIG.DATA_CONTRACT_ADDRESS || CONFIG.DATA_CONTRACT_ADDRESS === ('your_data_contract_address' as `0x${string}`)) {
         console.error('DATA_CONTRACT_ADDRESS not configured');
         return null;
       }
 
-      if (!CONFIG.AGGREGATOR_ADDRESS || CONFIG.AGGREGATOR_ADDRESS === 'your_aggregator_address') {
+      if (!CONFIG.AGGREGATOR_ADDRESS || CONFIG.AGGREGATOR_ADDRESS === ('your_aggregator_address' as `0x${string}`)) {
         console.error('AGGREGATOR_ADDRESS not configured');
         return null;
       }
@@ -175,7 +175,7 @@ export class TradeService {
         abi: indexAbi,
         functionName: 'balanceOf',
         args: [userAddress],
-      }) as bigint;
+      });
 
       if (userBalance === 0n) {
         console.log('User has no balance in the index');
@@ -201,9 +201,9 @@ export class TradeService {
           abi: indexAbi,
           functionName: 'tokens',
           args: [BigInt(i)],
-        }) as `0x${string}`;
+        });
         
-        tokenAddresses.push(tokenAddress);
+        tokenAddresses.push(tokenAddress as `0x${string}`);
         
         // Get user's balance of this specific token in the index
         try {
@@ -212,7 +212,7 @@ export class TradeService {
             abi: indexAbi,
             functionName: 'getTokenBalance',
             args: [userAddress, BigInt(i)],
-          }) as bigint;
+          });
           tokenBalances.push(tokenBalance);
         } catch {
           // If getTokenBalance doesn't exist, calculate proportional share
@@ -235,22 +235,22 @@ export class TradeService {
           CONFIG.AGGREGATOR_ADDRESS,
           tokenAddresses,
           tokenBalances,
-          ETH_ADDRESS
+          ETH_ADDRESS as `0x${string}`
         ],
       }) as FormattedOffer[];
 
       console.log('Received formatted offers for exit:', formattedOffers.length);
 
       // Transform FormattedOffer array to Trade array
-      const trades: Trade[] = formattedOffers.map((offer, index) => {
+      const trades: readonly Trade[] = formattedOffers.map((offer, index) => {
         // If the offer has no path (empty offer), create a minimal trade
         if (!offer.path || offer.path.length === 0) {
           console.log(`Token ${index}: Empty offer for exit`);
           return {
             amountIn: tokenBalances[index],
             amountOut: 0n,
-            path: [],
-            adapters: []
+            path: [] as readonly `0x${string}`[],
+            adapters: [] as readonly `0x${string}`[]
           };
         }
 
@@ -262,8 +262,8 @@ export class TradeService {
         return {
           amountIn: tokenBalances[index],
           amountOut: amountOut,
-          path: offer.path,
-          adapters: offer.adapters
+          path: offer.path as readonly `0x${string}`[],
+          adapters: offer.adapters as readonly `0x${string}`[]
         };
       });
 
@@ -274,7 +274,7 @@ export class TradeService {
         abi: indexAbi,
         functionName: 'zapOut',
         args: [
-          ETH_ADDRESS,
+          ETH_ADDRESS as `0x${string}`,
           trades,
           0n, // minTotalOut (0 for now, can be calculated from slippage)
           CONFIG.MAX_SLIPPAGE,
