@@ -1,8 +1,11 @@
-import { parseEther, encodeFunctionData } from 'viem';
+import { parseEther } from 'viem';
 import { CONFIG, ETH_ADDRESS } from '../config/constants';
 import { indexAbi } from '../config/abis';
 import { dataAbi } from '../config/dataAbi';
 import { BlockchainService } from './blockchain.service';
+
+// WETH address on Base
+const WETH_ADDRESS = '0x4200000000000000000000000000000000000006' as const;
 
 interface FormattedOffer {
   amounts: bigint[];
@@ -10,14 +13,6 @@ interface FormattedOffer {
   path: `0x${string}`[];
   gasEstimate: bigint;
 }
-
-// Define the Trade type to match the ABI exactly
-type TradeStruct = {
-  amountIn: bigint;
-  amountOut: bigint;
-  path: `0x${string}`[];
-  adapters: `0x${string}`[];
-};
 
 export class TradeService {
   private blockchain: BlockchainService;
@@ -73,25 +68,27 @@ export class TradeService {
       
       console.log('Percents array:', percents.map(p => p.toString()));
 
-      // Get precomputed trades from data contract
-      console.log('Calling precomputeZapIn on data contract...');
+      // Get precomputed trades from data contract with increased gas limit
+      // Use WETH address for data contract calls
+      console.log('Calling precomputeZapIn on data contract with WETH address and 15M gas...');
       const formattedOffers = await publicClient.readContract({
         address: CONFIG.DATA_CONTRACT_ADDRESS,
         abi: dataAbi,
         functionName: 'precomputeZapIn',
         args: [
           CONFIG.AGGREGATOR_ADDRESS,
-          ETH_ADDRESS,
+          WETH_ADDRESS, // Use WETH instead of ETH_ADDRESS
           ethAmount,
           tokenAddresses,
           percents
         ],
+        gas: 15_000_000n, // Set gas limit to 15M
       }) as FormattedOffer[];
 
       console.log('Received formatted offers:', formattedOffers.length);
 
-      // Transform FormattedOffer array to TradeStruct array
-      const trades: TradeStruct[] = formattedOffers.map((offer, index) => {
+      // Transform FormattedOffer array to Trade array with explicit typing
+      const trades = formattedOffers.map((offer, index) => {
         // Calculate the amount for this token
         const amountForToken = (ethAmount * percents[index]) / 10000n;
         
@@ -101,9 +98,9 @@ export class TradeService {
           return {
             amountIn: amountForToken,
             amountOut: 0n,
-            path: [],
-            adapters: []
-          } as TradeStruct;
+            path: [] as `0x${string}`[],
+            adapters: [] as `0x${string}`[]
+          };
         }
 
         // Get the output amount (last amount in the amounts array)
@@ -116,32 +113,25 @@ export class TradeService {
           amountOut: amountOut,
           path: offer.path,
           adapters: offer.adapters
-        } as TradeStruct;
+        };
       });
 
       console.log('Transformed trades:', trades.length);
 
-      // Execute zapIn on the INDEX_ADDRESS using raw transaction
+      // Execute zapIn on the INDEX_ADDRESS - still use ETH_ADDRESS for the actual transaction
       console.log('Executing zapIn...');
-      
-      // Encode the function data
-      const data = encodeFunctionData({
+      const hash = await walletClient.writeContract({
+        address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
         functionName: 'zapIn',
         args: [
-          ETH_ADDRESS as `0x${string}`,
+          ETH_ADDRESS as `0x${string}`, // Keep ETH_ADDRESS for the actual zapIn call
           ethAmount,
           percents,
-          trades,
-          0n,
+          trades as any, // Type assertion to bypass viem's strict typing
+          0n, // minTotalValueOut (0 for now, can be calculated from slippage)
           CONFIG.MAX_SLIPPAGE,
         ],
-      });
-
-      // Send the transaction
-      const hash = await walletClient.sendTransaction({
-        to: CONFIG.INDEX_ADDRESS,
-        data,
         value: ethAmount,
       });
 
@@ -233,8 +223,9 @@ export class TradeService {
       console.log('Exit - Token addresses:', tokenAddresses);
       console.log('Exit - Token balances:', tokenBalances.map(b => b.toString()));
 
-      // Get precomputed trades for exit from data contract
-      console.log('Calling precomputeZapOut on data contract...');
+      // Get precomputed trades for exit from data contract with increased gas limit
+      // Use WETH address for data contract calls
+      console.log('Calling precomputeZapOut on data contract with WETH address and 15M gas...');
       const formattedOffers = await publicClient.readContract({
         address: CONFIG.DATA_CONTRACT_ADDRESS,
         abi: dataAbi,
@@ -243,23 +234,24 @@ export class TradeService {
           CONFIG.AGGREGATOR_ADDRESS,
           tokenAddresses,
           tokenBalances,
-          ETH_ADDRESS as `0x${string}`
+          WETH_ADDRESS // Use WETH instead of ETH_ADDRESS
         ],
+        gas: 15_000_000n, // Set gas limit to 15M
       }) as FormattedOffer[];
 
       console.log('Received formatted offers for exit:', formattedOffers.length);
 
-      // Transform FormattedOffer array to TradeStruct array
-      const trades: TradeStruct[] = formattedOffers.map((offer, index) => {
+      // Transform FormattedOffer array to Trade array with explicit typing
+      const trades = formattedOffers.map((offer, index) => {
         // If the offer has no path (empty offer), create a minimal trade
         if (!offer.path || offer.path.length === 0) {
           console.log(`Token ${index}: Empty offer for exit`);
           return {
             amountIn: tokenBalances[index],
             amountOut: 0n,
-            path: [],
-            adapters: []
-          } as TradeStruct;
+            path: [] as `0x${string}`[],
+            adapters: [] as `0x${string}`[]
+          };
         }
 
         // Get the output amount (last amount in the amounts array)
@@ -272,28 +264,21 @@ export class TradeService {
           amountOut: amountOut,
           path: offer.path,
           adapters: offer.adapters
-        } as TradeStruct;
+        };
       });
 
-      // Execute zapOut on the INDEX_ADDRESS using raw transaction
+      // Execute zapOut on the INDEX_ADDRESS - still use ETH_ADDRESS for the actual transaction
       console.log('Executing zapOut...');
-      
-      // Encode the function data
-      const data = encodeFunctionData({
+      const hash = await walletClient.writeContract({
+        address: CONFIG.INDEX_ADDRESS,
         abi: indexAbi,
         functionName: 'zapOut',
         args: [
-          ETH_ADDRESS as `0x${string}`,
-          trades,
-          0n,
+          ETH_ADDRESS as `0x${string}`, // Keep ETH_ADDRESS for the actual zapOut call
+          trades as any, // Type assertion to bypass viem's strict typing
+          0n, // minTotalOut (0 for now, can be calculated from slippage)
           CONFIG.MAX_SLIPPAGE,
         ],
-      });
-
-      // Send the transaction
-      const hash = await walletClient.sendTransaction({
-        to: CONFIG.INDEX_ADDRESS,
-        data,
       });
 
       console.log('Exit position tx:', hash);
