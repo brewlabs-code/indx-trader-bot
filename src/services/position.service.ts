@@ -30,8 +30,8 @@ export class PositionService {
       const walletAddress = this.blockchain.account.address;
       console.log('Wallet address:', walletAddress);
       
-      // Use the correct v2 positions endpoint
-      const positionsUrl = `https://indexes-api.brewlabs.info/v2/users/${walletAddress}/positions`;
+      // Use the correct indexes positions endpoint
+      const positionsUrl = `https://indexes-api.brewlabs.info/indexes/users/${walletAddress}/positions`;
       
       console.log('Fetching position from:', positionsUrl);
       
