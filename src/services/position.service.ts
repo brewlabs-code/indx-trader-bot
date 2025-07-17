@@ -37,12 +37,27 @@ export class PositionService {
       
       const response = await axios.get(positionsUrl);
       console.log('Position API response status:', response.status);
+      console.log('Raw response data:', JSON.stringify(response.data, null, 2));
 
       // Based on the actual API response structure
       const responseData = response.data;
       
-      if (!responseData || !responseData.data || !responseData.data.positions || responseData.data.positions.length === 0) {
-        console.log('No positions found in response data');
+      // Check if response structure is valid
+      if (!responseData || !responseData.data) {
+        console.log('Invalid response structure - missing data property');
+        return null;
+      }
+
+      // Check if positions exist and is an array
+      if (!responseData.data.positions || !Array.isArray(responseData.data.positions)) {
+        console.log('No positions array found in response data');
+        console.log('responseData.data.positions type:', typeof responseData.data.positions);
+        console.log('responseData.data.positions value:', responseData.data.positions);
+        return null;
+      }
+
+      if (responseData.data.positions.length === 0) {
+        console.log('Positions array is empty');
         return null;
       }
       
@@ -61,6 +76,10 @@ export class PositionService {
         });
       } else {
         console.log('No position found for index:', CONFIG.INDEX_ADDRESS);
+        console.log('Available positions:', responseData.data.positions.map((p: any) => ({
+          indexAddress: p.indexAddress,
+          indexName: p.indexName
+        })));
       }
 
       return position || null;
