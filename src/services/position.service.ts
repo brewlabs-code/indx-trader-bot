@@ -16,15 +16,6 @@ interface Position {
   };
 }
 
-interface PositionApiResponse {
-  indexAddress: string;
-  indexPid: number;
-  indexName: string;
-  chainId: number;
-  usdAmount: string;
-  formattedUsdAmount: string;
-}
-
 export class PositionService {
   private blockchain: BlockchainService;
 
@@ -39,48 +30,46 @@ export class PositionService {
       const walletAddress = this.blockchain.account.address;
       console.log('Wallet address:', walletAddress);
       
-      // Use the correct indexes positions endpoint
-      const positionsUrl = `https://indexes-api.brewlabs.info/indexes/users/${walletAddress}/positions`;
+      // Use the insights endpoint which has complete P&L data
+      const insightsUrl = `https://indexes-api.brewlabs.info/indexes/users/${walletAddress}/insights`;
       
-      console.log('Fetching position from:', positionsUrl);
+      console.log('Fetching insights from:', insightsUrl);
       
-      const response = await axios.get(positionsUrl);
-      console.log('Position API response status:', response.status);
-      console.log('Raw response data:', JSON.stringify(response.data, null, 2));
+      const response = await axios.get(insightsUrl);
+      console.log('Insights API response status:', response.status);
+      console.log('Raw insights data:', JSON.stringify(response.data, null, 2));
 
-      // Based on the actual API response structure
+      // Check response structure
       const responseData = response.data;
       
-      // Check if response structure is valid
       if (!responseData || !responseData.data) {
         console.log('Invalid response structure - missing data property');
         return null;
       }
 
-      // Check if positions exist - now it's an object, not an array
-      if (!responseData.data.positions || typeof responseData.data.positions !== 'object') {
-        console.log('No positions object found in response data');
+      // Check if positions array exists
+      if (!responseData.data.positions || !Array.isArray(responseData.data.positions)) {
+        console.log('No positions array found in insights data');
         return null;
       }
 
-      // Convert positions object to array
-      const positionsArray = Object.values(responseData.data.positions) as PositionApiResponse[];
+      const positions = responseData.data.positions;
       
-      if (positionsArray.length === 0) {
-        console.log('Positions object is empty');
+      if (positions.length === 0) {
+        console.log('Positions array is empty');
         return null;
       }
       
-      console.log(`Found ${positionsArray.length} positions`);
+      console.log(`Found ${positions.length} positions`);
       
       // Find position for our index
-      const apiPosition = positionsArray.find(
-        (p: PositionApiResponse) => p.indexAddress.toLowerCase() === CONFIG.INDEX_ADDRESS.toLowerCase()
+      const position = positions.find(
+        (p: any) => p.indexAddress.toLowerCase() === CONFIG.INDEX_ADDRESS.toLowerCase()
       );
 
-      if (!apiPosition) {
+      if (!position) {
         console.log('No position found for index:', CONFIG.INDEX_ADDRESS);
-        console.log('Available positions:', positionsArray.map((p: PositionApiResponse) => ({
+        console.log('Available positions:', positions.map((p: any) => ({
           indexAddress: p.indexAddress,
           indexName: p.indexName
         })));
@@ -88,15 +77,30 @@ export class PositionService {
       }
 
       console.log('Found position for our index:', {
-        indexAddress: apiPosition.indexAddress,
-        indexName: apiPosition.indexName,
-        usdAmount: apiPosition.usdAmount,
+        indexAddress: position.indexAddress,
+        indexName: position.indexName,
+        profitLoss: position.profitLoss,
+        current: position.current,
       });
 
-      // Get additional position details with P&L calculation
-      const enrichedPosition = await this.enrichPositionWithPnL(apiPosition);
+      // Convert to our Position format
+      const formattedPosition: Position = {
+        indexAddress: position.indexAddress,
+        indexName: position.indexName,
+        profitLoss: {
+          percentage: position.profitLoss.percentage,
+          usd: position.profitLoss.usd,
+          eth: position.profitLoss.eth,
+        },
+        current: {
+          ethAmount: position.current.ethAmount,
+          usdAmount: position.current.usdAmount,
+        },
+      };
+
+      console.log('Formatted position:', formattedPosition);
       
-      return enrichedPosition;
+      return formattedPosition;
     } catch (error: any) {
       if (error.response?.status === 404) {
         console.log('No positions found (404) - this is normal for new wallets');
@@ -111,51 +115,6 @@ export class PositionService {
       
       return null;
     }
-  }
-
-  private async enrichPositionWithPnL(apiPosition: PositionApiResponse): Promise<Position> {
-    try {
-      // Try to get detailed position info with P&L from the detailed endpoint
-      const detailUrl = `https://indexes-api.brewlabs.info/indexes/${apiPosition.indexAddress}/positions/${this.blockchain.account.address}`;
-      
-      console.log('Fetching detailed position from:', detailUrl);
-      
-      const detailResponse = await axios.get(detailUrl);
-      console.log('Detail API response:', JSON.stringify(detailResponse.data, null, 2));
-      
-      const detailData = detailResponse.data;
-      
-      // If we have detailed data with P&L, use it
-      if (detailData?.data?.profitLoss) {
-        return {
-          indexAddress: apiPosition.indexAddress,
-          indexName: apiPosition.indexName,
-          profitLoss: detailData.data.profitLoss,
-          current: detailData.data.current || {
-            ethAmount: '0',
-            usdAmount: apiPosition.usdAmount,
-          },
-        };
-      }
-    } catch (error) {
-      console.log('Could not fetch detailed P&L data, using basic position data');
-    }
-
-    // Fallback: create a basic position without P&L data
-    // This means the bot will treat it as a new position
-    return {
-      indexAddress: apiPosition.indexAddress,
-      indexName: apiPosition.indexName,
-      profitLoss: {
-        percentage: 0, // No profit/loss data available
-        usd: '0',
-        eth: '0',
-      },
-      current: {
-        ethAmount: '0', // Not available in basic API
-        usdAmount: apiPosition.usdAmount,
-      },
-    };
   }
 
   shouldTakeProfit(position: Position): boolean {
